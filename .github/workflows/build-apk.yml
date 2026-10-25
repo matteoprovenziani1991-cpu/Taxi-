@@ -1,5 +1,5 @@
 
-name: Build taxi€ APK
+name: Build taxi APK
 
 on:
   workflow_dispatch:
@@ -12,41 +12,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Java
+      - name: Install Java and Gradle
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Extract Android project
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Extract project
         run: |
           sudo apt-get update
           sudo apt-get install -y unzip
-          mkdir -p extracted
+          mkdir extracted
           ZIP_FILE=$(find . -maxdepth 2 -type f -name '*.zip' | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "Errore: nessun file ZIP trovato nel repository"
+            echo "ZIP del progetto non trovato"
             exit 1
           fi
           unzip -o "$ZIP_FILE" -d extracted
-          PROJECT_DIR=$(find extracted -type f \( -name gradlew -o -name settings.gradle -o -name settings.gradle.kts \) -printf '%h\n' | head -n 1)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Errore: non trovo i file Gradle del progetto Android"
-            find extracted -maxdepth 4 -type f
-            exit 1
-          fi
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          find extracted -maxdepth 5 -type f
 
       - name: Build debug APK
         run: |
-          cd "$PROJECT_DIR"
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-          else
-            echo "Errore: manca gradlew nel progetto"
+          SETTINGS=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)
+          if [ -z "$SETTINGS" ]; then
+            echo "Non trovo settings.gradle nel progetto estratto"
             exit 1
           fi
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          cd "$PROJECT_DIR"
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -54,4 +53,3 @@ jobs:
           name: taxi-euro-apk
           path: extracted/**/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          
